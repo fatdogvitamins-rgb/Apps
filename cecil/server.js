@@ -2,7 +2,13 @@ const express = require('express');
 const path = require('path');
 const http = require('http');
 const { Server: WebSocketServer } = require('ws');
-const noble = require('@abandonware/noble');
+
+let noble;
+try {
+  noble = require('@abandonware/noble');
+} catch (err) {
+  console.warn('Optional Bluetooth dependency not installed, running in simulated mode.');
+}
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4000;
 
@@ -59,52 +65,65 @@ app.get('/api/ping', (req, res) => {
 
 const knownRobotNames = ['CecilBot', 'Cecil'];
 
-noble.on('stateChange', async (state) => {
-  console.log('Bluetooth state:', state);
-  if (state === 'poweredOn') {
-    await noble.startScanningAsync([], false);
-    console.log('Scanning for Bluetooth devices...');
-  } else {
-    await noble.stopScanningAsync();
-  }
-});
+if (noble) {
+  noble.on('stateChange', async (state) => {
+    console.log('Bluetooth state:', state);
+    if (state === 'poweredOn') {
+      await noble.startScanningAsync([], false);
+      console.log('Scanning for Bluetooth devices...');
+    } else {
+      await noble.stopScanningAsync();
+    }
+  });
 
-noble.on('discover', async (peripheral) => {
-  const name = peripheral.advertisement.localName || peripheral.id;
-  if (!knownRobotNames.some((prefix) => name?.includes(prefix))) {
-    return;
-  }
+  noble.on('discover', async (peripheral) => {
+    const name = peripheral.advertisement.localName || peripheral.id;
+    if (!knownRobotNames.some((prefix) => name?.includes(prefix))) {
+      return;
+    }
 
-  if (robots.has(peripheral.id)) {
-    return;
-  }
+    if (robots.has(peripheral.id)) {
+      return;
+    }
 
-  const robot = {
-    id: peripheral.id,
-    name,
-    state: 'discovered',
-    peripheral,
-  };
-  robots.set(peripheral.id, robot);
-  broadcast({ type: 'robots', robots: Array.from(robots.values()) });
-
-  try {
-    robot.state = 'connecting';
-    broadcast({ type: 'robots', robots: Array.from(robots.values()) });
-    await peripheral.connectAsync();
-    robot.state = 'connected';
+    const robot = {
+      id: peripheral.id,
+      name,
+      state: 'discovered',
+      peripheral,
+    };
+    robots.set(peripheral.id, robot);
     broadcast({ type: 'robots', robots: Array.from(robots.values()) });
 
-    peripheral.on('disconnect', () => {
-      robot.state = 'disconnected';
+    try {
+      robot.state = 'connecting';
       broadcast({ type: 'robots', robots: Array.from(robots.values()) });
-    });
-  } catch (err) {
-    console.error('Failed to connect to', name, err);
-    robot.state = 'error';
+      await peripheral.connectAsync();
+      robot.state = 'connected';
+      broadcast({ type: 'robots', robots: Array.from(robots.values()) });
+
+      peripheral.on('disconnect', () => {
+        robot.state = 'disconnected';
+        broadcast({ type: 'robots', robots: Array.from(robots.values()) });
+      });
+    } catch (err) {
+      console.error('Failed to connect to', name, err);
+      robot.state = 'error';
+      broadcast({ type: 'robots', robots: Array.from(robots.values()) });
+    }
+  });
+} else {
+  // Simulation mode: create a fake robot so the UI works without Bluetooth.
+  setTimeout(() => {
+    const robot = {
+      id: 'sim-robot-1',
+      name: 'CecilBot (Sim)',
+      state: 'connected',
+    };
+    robots.set(robot.id, robot);
     broadcast({ type: 'robots', robots: Array.from(robots.values()) });
-  }
-});
+  }, 500);
+}
 
 server.listen(PORT, () => {
   console.log(`Cecil server running: http://localhost:${PORT}`);

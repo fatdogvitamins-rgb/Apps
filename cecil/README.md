@@ -31,5 +31,5 @@ npm run cli -- send --id <robotId> --cmd "move:forward"
 
 ## Notes
 
-- This project uses `@abandonware/noble` for Bluetooth Low Energy scanning. It requires a Bluetooth adapter that is supported by your OS.
+- This project can use `@abandonware/noble` for Bluetooth Low Energy scanning, but it installs as an optional dependency. If you don't have BLE support or build tools installed, the server will run in simulation mode.
 - The `command` endpoint currently broadcasts commands to connected web clients; replace it with real BLE characteristic writes for your robot.
