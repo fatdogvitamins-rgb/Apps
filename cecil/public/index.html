@@ -68,11 +68,12 @@
             <strong>${r.name}</strong> <small>(${r.id})</small><br />
             State: <strong>${r.state}</strong><br />
             ${r.writeCharUuid ? `<span style="font-size:0.9rem;">write UUID: <code>${r.writeCharUuid}</code></span><br />` : ''}
-            <button data-id="${r.id}">Select</button>
-        </div>
-        `).join('');
-
-        robotsEl.querySelectorAll('button[data-id]').forEach((btn) => {
+            ${r.services && r.services.length ? `<details style="margin-top:0.5rem;"><summary style="cursor:pointer;">Services & characteristics</summary>
+            <div style="padding-left:1rem;">
+                ${r.services.map((s) => `<div><strong>S:</strong> <code>${s.uuid}</code></div>`).join('')}
+                ${r.characteristics && r.characteristics.length ? (`<div style="margin-top:0.25rem;"><strong>Characteristics</strong><br />${r.characteristics.map((c) => `<div><code>${c.uuid}</code> (${c.properties.join(', ')})</div>`).join('')}</div>`) : ''}
+            </div>
+            </details>` : ''}
         btn.addEventListener('click', () => {
             robotIdInput.value = btn.dataset.id;
         });
