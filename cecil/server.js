@@ -12,6 +12,9 @@ try {
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4000;
 
+const BLE_SERVICE_UUID = (process.env.CECIL_BLE_SERVICE || 'ffe0').toLowerCase();
+const BLE_CHAR_UUID = (process.env.CECIL_BLE_CHAR || 'ffe1').toLowerCase();
+
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
@@ -41,9 +44,9 @@ app.get('/api/robots', (req, res) => {
 });
 
 app.post('/api/command', async (req, res) => {
-  const { robotId, command } = req.body;
-  if (!robotId || !command) {
-    return res.status(400).json({ error: 'robotId and command are required' });
+  const { robotId, command, payloadHex } = req.body;
+  if (!robotId || (!command && !payloadHex)) {
+    return res.status(400).json({ error: 'robotId and command or payloadHex are required' });
   }
 
   const robot = robots.get(robotId);
@@ -51,13 +54,51 @@ app.post('/api/command', async (req, res) => {
     return res.status(404).json({ error: 'Robot not found' });
   }
 
-  // This is where a real implementation would write to the BLE characteristic.
-  // For now we just broadcast the command to any connected UI and log it.
-  console.log(`Sending command to ${robot.name} (${robotId}):`, command);
-  broadcast({ type: 'command', robotId, command });
+  const payload = payloadHex
+    ? Buffer.from(payloadHex.replace(/\s+/g, ''), 'hex')
+    : buildMbotPayload(command);
 
-  res.json({ ok: true });
+  if (!payload) {
+    return res.status(400).json({ error: 'Unable to build payload for the given command' });
+  }
+
+  console.log(`Sending command to ${robot.name} (${robotId}):`, command || payloadHex);
+
+  // Write to BLE characteristic if connected
+  if (robot.writeChar) {
+    try {
+      await robot.writeChar.writeAsync(payload, false);
+      broadcast({ type: 'command', robotId, command, payloadHex });
+      return res.json({ ok: true });
+    } catch (err) {
+      console.error('BLE write failed', err);
+      return res.status(500).json({ error: 'BLE write failed', details: String(err) });
+    }
+  }
+
+  // Fallback: just broadcast to UI
+  broadcast({ type: 'command', robotId, command, payloadHex });
+  res.json({ ok: true, simulated: true });
 });
+
+function buildMbotPayload(command) {
+  // Basic Makeblock packet protocol (mBot): 0xFF 0x55 <len> <cmd> <...>
+  // For demo purposes we provide a few simple movement commands.
+  const cmdMap = {
+    forward: [0x7a, 0x00, 0x00, 0x32, 0x00],
+    back: [0x7a, 0x00, 0x00, 0xce, 0xff],
+    left: [0x7a, 0x00, 0x00, 0x32, 0xff],
+    right: [0x7a, 0x00, 0x00, 0xce, 0x00],
+    stop: [0x7a, 0x00, 0x00, 0x00, 0x00],
+  };
+
+  const body = cmdMap[command];
+  if (!body) return null;
+
+  // Packet framing: [0xFF, 0x55, len, ...body]
+  const packet = Buffer.from([0xff, 0x55, body.length, ...body]);
+  return packet;
+}
 
 app.get('/api/ping', (req, res) => {
   res.json({ ok: true });
@@ -90,15 +131,29 @@ if (noble) {
       id: peripheral.id,
       name,
       state: 'discovered',
-      peripheral,
-    };
-    robots.set(peripheral.id, robot);
-    broadcast({ type: 'robots', robots: Array.from(robots.values()) });
+  };
+  // Keep a reference to the peripheral without serializing it.
+  Object.defineProperty(robot, 'peripheral', {
+    value: peripheral,
+    enumerable: false,
+  });
 
-    try {
-      robot.state = 'connecting';
-      broadcast({ type: 'robots', robots: Array.from(robots.values()) });
-      await peripheral.connectAsync();
+      // Discover services/characteristics for mBot (and similar BLE modules)
+      const { services, characteristics } = await peripheral.discoverAllServicesAndCharacteristicsAsync();
+      robot.services = services.map((s) => ({ uuid: s.uuid }));
+      robot.characteristics = characteristics.map((c) => ({ uuid: c.uuid, properties: c.properties }));
+
+      // Prefer a pre-configured (or common) BLE characteristic for writing
+      const writeChar = characteristics.find(
+        (c) => c.uuid.toLowerCase() === BLE_CHAR_UUID || c.properties.includes('write') || c.properties.includes('writeWithoutResponse')
+      );
+
+      robot.writeCharUuid = writeChar?.uuid;
+      Object.defineProperty(robot, 'writeChar', {
+        value: writeChar,
+        enumerable: false,
+      });
+
       robot.state = 'connected';
       broadcast({ type: 'robots', robots: Array.from(robots.values()) });
 

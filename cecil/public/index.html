@@ -22,8 +22,12 @@
         <input id="robotId" style="width:100%" />
       </label>
       <label>
-        Command:<br />
-        <input id="command" style="width:100%" placeholder="e.g. move:forward" />
+        Command (predefined):<br />
+        <input id="command" style="width:100%" placeholder="e.g. forward, back, left, right, stop" />
+      </label>
+      <label>
+        Raw payload (hex):<br />
+        <input id="payloadHex" style="width:100%" placeholder="e.g. ff 55 05 ..." />
       </label>
       <button id="send">Send</button>
     </div>
@@ -36,6 +40,7 @@
       const robotsEl = document.getElementById('robots');
       const robotIdInput = document.getElementById('robotId');
       const commandInput = document.getElementById('command');
+      const payloadInput = document.getElementById('payloadHex');
       const sendButton = document.getElementById('send');
 
       function log(msg) {
@@ -62,6 +67,7 @@
           <div style="border:1px solid #ddd; padding:0.75rem; border-radius:6px; margin-bottom:0.5rem;">
             <strong>${r.name}</strong> <small>(${r.id})</small><br />
             State: <strong>${r.state}</strong><br />
+            ${r.writeCharUuid ? `<span style="font-size:0.9rem;">write UUID: <code>${r.writeCharUuid}</code></span><br />` : ''}
             <button data-id="${r.id}">Select</button>
           </div>
         `).join('');
@@ -76,15 +82,16 @@
       sendButton.addEventListener('click', async () => {
         const robotId = robotIdInput.value.trim();
         const command = commandInput.value.trim();
-        if (!robotId || !command) {
-          log('Must provide robot ID and command');
+        const payloadHex = payloadInput.value.trim();
+        if (!robotId || (!command && !payloadHex)) {
+          log('Must provide robot ID and either a command or raw payload (hex)');
           return;
         }
 
         const res = await fetch('/api/command', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ robotId, command }),
+          body: JSON.stringify({ robotId, command, payloadHex }),
         });
         const text = await res.text();
         log(`Server response: ${text}`);
