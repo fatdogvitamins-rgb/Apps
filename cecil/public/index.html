@@ -73,29 +73,29 @@
         `).join('');
 
         robotsEl.querySelectorAll('button[data-id]').forEach((btn) => {
-          btn.addEventListener('click', () => {
+        btn.addEventListener('click', () => {
             robotIdInput.value = btn.dataset.id;
-          });
         });
-      }
+        });
+    }
 
-      sendButton.addEventListener('click', async () => {
+    sendButton.addEventListener('click', async () => {
         const robotId = robotIdInput.value.trim();
         const command = commandInput.value.trim();
         const payloadHex = payloadInput.value.trim();
         if (!robotId || (!command && !payloadHex)) {
-          log('Must provide robot ID and either a command or raw payload (hex)');
-          return;
+        log('Must provide robot ID and either a command or raw payload (hex)');
+        return;
         }
 
         const res = await fetch('/api/command', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ robotId, command, payloadHex }),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ robotId, command, payloadHex }),
         });
         const text = await res.text();
         log(`Server response: ${text}`);
-      });
+    });
     </script>
   </body>
 </html>
