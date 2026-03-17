@@ -37,6 +37,27 @@ function broadcast(message) {
 
 wss.on('connection', (ws) => {
   ws.send(JSON.stringify({ type: 'robots', robots: Array.from(robots.values()) }));
+
+  ws.on('message', async (message) => {
+    let data;
+    try {
+      data = JSON.parse(message);
+    } catch (err) {
+      return;
+    }
+
+    // Simple Wi‑Fi bridge protocol: clients can send commands to robots over WebSocket.
+    if (data.type === 'sendCommand' && data.robotId) {
+      const { robotId, command, payloadHex } = data;
+      // Reuse the same logic as the HTTP command endpoint
+      const fakeReq = { body: { robotId, command, payloadHex } };
+      const fakeRes = {
+        status: (code) => ({ json: (obj) => ws.send(JSON.stringify({ type: 'commandResult', code, ...obj })) }),
+        json: (obj) => ws.send(JSON.stringify({ type: 'commandResult', code: 200, ...obj })),
+      };
+      await app._router.handle(fakeReq, fakeRes, () => {});
+    }
+  });
 });
 
 app.get('/api/robots', (req, res) => {
