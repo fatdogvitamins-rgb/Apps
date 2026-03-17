@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cecil Robot Control</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 860px; margin: 2rem auto; padding: 0 1rem; }
+      button { padding: 0.5rem 1rem; margin: 0.2rem; }
+      pre { background: #f7f7f7; padding: 1rem; border-radius: 6px; }
+    </style>
+  </head>
+  <body>
+    <h1>Cecil Robot Control</h1>
+    <p>This UI connects to the Cecil server and shows discovered robots (Bluetooth).</p>
+    <div id="robots"></div>
+
+    <h2>Send command</h2>
+    <div>
+      <label>
+        Robot ID:<br />
+        <input id="robotId" style="width:100%" />
+      </label>
+      <label>
+        Command:<br />
+        <input id="command" style="width:100%" placeholder="e.g. move:forward" />
+      </label>
+      <button id="send">Send</button>
+    </div>
+
+    <h2>Log</h2>
+    <pre id="log"></pre>
+
+    <script>
+      const logEl = document.getElementById('log');
+      const robotsEl = document.getElementById('robots');
+      const robotIdInput = document.getElementById('robotId');
+      const commandInput = document.getElementById('command');
+      const sendButton = document.getElementById('send');
+
+      function log(msg) {
+        logEl.textContent += msg + '\n';
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      const ws = new WebSocket(`ws://${location.host}`);
+      ws.addEventListener('message', (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'robots') {
+          renderRobots(data.robots);
+        } else if (data.type === 'command') {
+          log(`COMMAND: ${data.robotId} → ${data.command}`);
+        }
+      });
+
+      function renderRobots(robots) {
+        if (!robots.length) {
+          robotsEl.innerHTML = '<p>No robots found yet. Ensure Bluetooth is enabled and the node server is running.</p>';
+          return;
+        }
+        robotsEl.innerHTML = robots.map((r) => `
+          <div style="border:1px solid #ddd; padding:0.75rem; border-radius:6px; margin-bottom:0.5rem;">
+            <strong>${r.name}</strong> <small>(${r.id})</small><br />
+            State: <strong>${r.state}</strong><br />
+            <button data-id="${r.id}">Select</button>
+          </div>
+        `).join('');
+
+        robotsEl.querySelectorAll('button[data-id]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            robotIdInput.value = btn.dataset.id;
+          });
+        });
+      }
+
+      sendButton.addEventListener('click', async () => {
+        const robotId = robotIdInput.value.trim();
+        const command = commandInput.value.trim();
+        if (!robotId || !command) {
+          log('Must provide robot ID and command');
+          return;
+        }
+
+        const res = await fetch('/api/command', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ robotId, command }),
+        });
+        const text = await res.text();
+        log(`Server response: ${text}`);
+      });
+    </script>
+  </body>
+</html>
