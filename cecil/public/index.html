@@ -1,75 +1,75 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
+<head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Cecil Robot Control</title>
     <style>
-      body { font-family: system-ui, sans-serif; max-width: 860px; margin: 2rem auto; padding: 0 1rem; }
-      button { padding: 0.5rem 1rem; margin: 0.2rem; }
-      pre { background: #f7f7f7; padding: 1rem; border-radius: 6px; }
+    body { font-family: system-ui, sans-serif; max-width: 860px; margin: 2rem auto; padding: 0 1rem; }
+    button { padding: 0.5rem 1rem; margin: 0.2rem; }
+    pre { background: #f7f7f7; padding: 1rem; border-radius: 6px; }
     </style>
-  </head>
-  <body>
+</head>
+<body>
     <h1>Cecil Robot Control</h1>
     <p>This UI connects to the Cecil server and shows discovered robots (Bluetooth).</p>
     <div id="robots"></div>
 
     <h2>Send command</h2>
     <div>
-      <label>
+    <label>
         Robot ID:<br />
         <input id="robotId" style="width:100%" />
-      </label>
-      <label>
+    </label>
+    <label>
         Command (predefined):<br />
         <input id="command" style="width:100%" placeholder="e.g. forward, back, left, right, stop" />
-      </label>
-      <label>
+    </label>
+    <label>
         Raw payload (hex):<br />
         <input id="payloadHex" style="width:100%" placeholder="e.g. ff 55 05 ..." />
-      </label>
-      <button id="send">Send</button>
+    </label>
+    <button id="send">Send</button>
     </div>
 
     <h2>Log</h2>
     <pre id="log"></pre>
 
     <script>
-      const logEl = document.getElementById('log');
-      const robotsEl = document.getElementById('robots');
-      const robotIdInput = document.getElementById('robotId');
-      const commandInput = document.getElementById('command');
-      const payloadInput = document.getElementById('payloadHex');
-      const sendButton = document.getElementById('send');
+    const logEl = document.getElementById('log');
+    const robotsEl = document.getElementById('robots');
+    const robotIdInput = document.getElementById('robotId');
+    const commandInput = document.getElementById('command');
+    const payloadInput = document.getElementById('payloadHex');
+    const sendButton = document.getElementById('send');
 
-      function log(msg) {
+    function log(msg) {
         logEl.textContent += msg + '\n';
         logEl.scrollTop = logEl.scrollHeight;
-      }
+    }
 
-      const ws = new WebSocket(`ws://${location.host}`);
-      ws.addEventListener('message', (event) => {
+    const ws = new WebSocket(`ws://${location.host}`);
+    ws.addEventListener('message', (event) => {
         const data = JSON.parse(event.data);
         if (data.type === 'robots') {
-          renderRobots(data.robots);
+        renderRobots(data.robots);
         } else if (data.type === 'command') {
-          log(`COMMAND: ${data.robotId} → ${data.command}`);
+        log(`COMMAND: ${data.robotId} → ${data.command}`);
         }
-      });
+    });
 
-      function renderRobots(robots) {
+    function renderRobots(robots) {
         if (!robots.length) {
-          robotsEl.innerHTML = '<p>No robots found yet. Ensure Bluetooth is enabled and the node server is running.</p>';
-          return;
+        robotsEl.innerHTML = '<p>No robots found yet. Ensure Bluetooth is enabled and the node server is running.</p>';
+        return;
         }
         robotsEl.innerHTML = robots.map((r) => `
-          <div style="border:1px solid #ddd; padding:0.75rem; border-radius:6px; margin-bottom:0.5rem;">
+        <div style="border:1px solid #ddd; padding:0.75rem; border-radius:6px; margin-bottom:0.5rem;">
             <strong>${r.name}</strong> <small>(${r.id})</small><br />
             State: <strong>${r.state}</strong><br />
             ${r.writeCharUuid ? `<span style="font-size:0.9rem;">write UUID: <code>${r.writeCharUuid}</code></span><br />` : ''}
             <button data-id="${r.id}">Select</button>
-          </div>
+        </div>
         `).join('');
 
         robotsEl.querySelectorAll('button[data-id]').forEach((btn) => {
